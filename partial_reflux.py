@@ -1,6 +1,6 @@
 import numpy as np
 
-class DataProcess:
+class PartialReflux:
     def __init__(self, alpha, q, ratio, z_F, x_D, x_W):
         self.alpha = alpha
         self.q = q
@@ -72,6 +72,8 @@ class DataProcess:
                 y_temp = self.operating_line_of_stripping_section(self.x_list[-1])
             self.y_list.append(y_temp) 
             
+        # 此步骤为了将最后一个点落在对角线上，注释掉下一行代码对最终结果无影响，但最后一个点会落在提馏线上。
+        self.y_list[-1] = self.x_list[-1]
 
         plate -= (self.x_list[-1] - self.x_W) / (self.x_list[-1] - self.x_list[-2])
         return plate, plate_for_loading
