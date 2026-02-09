@@ -4,8 +4,15 @@
 """
 import re
 
-class DataCheck:
+class CheckLineEdits:
     def __init__(self, line_edits):
+        """
+        检查所有输入框
+        
+        Args:
+            line_edits (QLineEdit): QLineEdit对象
+        """
+        
         self.line_edits = line_edits
     
     def is_all_filled(self):
@@ -45,3 +52,6 @@ class DataCheck:
         pattern = r'^\d+(\.\d+)?$'
         return bool(re.match(pattern, text))
        
+
+class CheckImportFile:
+    pass

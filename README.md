@@ -5,7 +5,8 @@
 可用于完成化工课程设计的部分内容。可以先掌握OriginLab的绘制方法加深化工原理的理解有利于考试。
 ## 2. 使用方法
 要求**PySide6，numpy，matplotlib**库  
-运行main.py即可
+运行main.py即可或  
+下载右边的release中的exe文件
 
 ## 3. 其他
 在发布初，发现有类似的仓库，供大家参考

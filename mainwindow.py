@@ -1,5 +1,8 @@
-from PySide6.QtWidgets import QMainWindow, QStatusBar, QMessageBox
-from PySide6.QtCore import QDateTime
+import sys
+import os
+
+from PySide6.QtWidgets import QMainWindow, QStatusBar, QMessageBox, QFileDialog
+from PySide6.QtCore import QDateTime, Qt
 from ui_mainwindow import Ui_MainWindow
 
 import partial_reflux
@@ -9,6 +12,7 @@ import data_check
 import matplotlib.pyplot as plt 
 import matplotlib
 import numpy as np
+import pandas as pd
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, app):
@@ -22,18 +26,29 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)       
-        self.checker_partial = data_check.DataCheck([self.lineEdit_alpha,
+        self.checker_partial = data_check.CheckLineEdits([self.lineEdit_alpha,
                                              self.lineEdit_q,
                                              self.lineEdit_ratio,
                                              self.lineEdit_z_F,
                                              self.lineEdit_x_D,
                                              self.lineEdit_x_W])
-        self.checker_full = data_check.DataCheck([self.lineEdit_alpha,
+        self.checker_full = data_check.CheckLineEdits([self.lineEdit_alpha,
                                              self.lineEdit_x_D,
+                                             self.lineEdit_x_W])
+        self.checker_partial_special = data_check.CheckLineEdits([self.lineEdit_q,
+                                             self.lineEdit_ratio,
+                                             self.lineEdit_z_F,
+                                             self.lineEdit_x_D,
+                                             self.lineEdit_x_W])
+        self.checker_full_special = data_check.CheckLineEdits([self.lineEdit_x_D,
                                              self.lineEdit_x_W])
         self.connect_signal()
         self.update_statusBar()
         self.update_lineEdit()
+
+        self.import_success = False
+        self.equilibrium_x = []
+        self.equilibrium_y = []
 
     def connect_signal(self):
         """连接所有信号槽"""
@@ -50,76 +65,105 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if line_edit:
                 line_edit.textChanged.connect(self.update_statusBar)
 
+        self.pushButton_import.clicked.connect(self.import_file)
+        self.pushButton_help.clicked.connect(self.show_import_help)
+        self.radioButton_ideal.toggled.connect(self.update_lineEdit)
+        self.radioButton_ideal.toggled.connect(self.update_statusBar)
+        self.radioButton_non_ideal.toggled.connect(self.update_lineEdit)
+        self.radioButton_non_ideal.toggled.connect(self.update_statusBar)
+
     def update_statusBar(self):
         """更新状态栏显示"""
-        if self.radioButton_partial.isChecked():
+        finish_style = """
+                    QStatusBar {
+                        background-color: #e8f5e8;
+                        color: #2d662d;
+                        border-top: 1px solid #b2d8b2;
+                        padding: 3px;
+                    }
+                """
+        unfinish_style = """
+                    QStatusBar {
+                        background-color: #fff8e1;
+                        color: #8a6d3b;
+                        border-top: 1px solid #f0d399;
+                        padding: 3px;
+                    }
+                """
+        if self.radioButton_partial.isChecked() and self.radioButton_ideal.isChecked():
             if self.checker_partial.is_all_filled():
-                self.statusBar.showMessage(f"部分回流模式：输入完成", 0)
-                # 设置为成功样式
-                self.statusBar.setStyleSheet("""
-                    QStatusBar {
-                        background-color: #e8f5e8;
-                        color: #2d662d;
-                        border-top: 1px solid #b2d8b2;
-                        padding: 3px;
-                    }
-                """)
+                self.statusBar.showMessage(f"部分回流、理想物系模式：输入完成", 0)
+                self.statusBar.setStyleSheet(finish_style)
             else:
-                self.statusBar.showMessage(f"部分回流模式：输入未完成", 0)
-                # 设置为警告样式
-                self.statusBar.setStyleSheet("""
-                    QStatusBar {
-                        background-color: #fff8e1;
-                        color: #8a6d3b;
-                        border-top: 1px solid #f0d399;
-                        padding: 3px;
-                    }
-                """)
-
-        else:
+                self.statusBar.showMessage(f"部分回流、理想物系模式：输入未完成", 0)
+                self.statusBar.setStyleSheet(unfinish_style)
+        elif self.radioButton_full.isChecked() and self.radioButton_ideal.isChecked():
             if self.checker_full.is_all_filled():
-                self.statusBar.showMessage(f"全回流模式：输入完成", 0)
-                # 设置为成功样式
-                self.statusBar.setStyleSheet("""
-                    QStatusBar {
-                        background-color: #e8f5e8;
-                        color: #2d662d;
-                        border-top: 1px solid #b2d8b2;
-                        padding: 3px;
-                    }
-                """)
+                self.statusBar.showMessage(f"全回流、理想物系模式：输入完成", 0)
+                self.statusBar.setStyleSheet(finish_style)
             else:
-                self.statusBar.showMessage(f"全回流模式：输入未完成", 0)
-                # 设置为警告样式
-                self.statusBar.setStyleSheet("""
-                    QStatusBar {
-                        background-color: #fff8e1;
-                        color: #8a6d3b;
-                        border-top: 1px solid #f0d399;
-                        padding: 3px;
-                    }
-                """)
+                self.statusBar.showMessage(f"全回流、理想物系模式：输入未完成", 0)
+                self.statusBar.setStyleSheet(unfinish_style)
+        elif self.radioButton_partial.isChecked() and self.radioButton_non_ideal.isChecked():
+            if self.checker_partial_special.is_all_filled() and self.import_success:
+                self.statusBar.showMessage(f"部分回流、非理想物系模式：输入完成", 0)
+                self.statusBar.setStyleSheet(finish_style)
+            else:
+                self.statusBar.showMessage(f"部分回流、非理想物系模式：输入未完成", 0)
+                self.statusBar.setStyleSheet(unfinish_style)
+        else:
+            if self.checker_full_special.is_all_filled() and self.import_success:
+                self.statusBar.showMessage(f"全回流、非理想物系模式：输入完成", 0)
+                self.statusBar.setStyleSheet(finish_style)
+            else:
+                self.statusBar.showMessage(f"全回流、非理想物系模式：输入未完成", 0)
+                self.statusBar.setStyleSheet(unfinish_style)
 
     def update_lineEdit(self):
         """更新QLineEdit启用状态"""
-        if self.radioButton_full.isChecked():
-            self.lineEdit_q.setEnabled(False)
-            self.lineEdit_ratio.setEnabled(False)
-            self.lineEdit_z_F.setEnabled(False)
-            self.lineEdit_q.clear()
-            self.lineEdit_ratio.clear()
-            self.lineEdit_z_F.clear()
-            self.lineEdit_q.setPlaceholderText("无需输入")
-            self.lineEdit_ratio.setPlaceholderText("无需输入")
-            self.lineEdit_z_F.setPlaceholderText("无需输入")
+        if self.radioButton_ideal.isChecked():
+            self.lineEdit_alpha.setEnabled(True)
+            self.lineEdit_alpha.setPlaceholderText("")
+            if self.radioButton_full.isChecked():
+                self.lineEdit_q.setEnabled(False)
+                self.lineEdit_ratio.setEnabled(False)
+                self.lineEdit_z_F.setEnabled(False)
+                self.lineEdit_q.clear()
+                self.lineEdit_ratio.clear()
+                self.lineEdit_z_F.clear()
+                self.lineEdit_q.setPlaceholderText("无需输入")
+                self.lineEdit_ratio.setPlaceholderText("无需输入")
+                self.lineEdit_z_F.setPlaceholderText("无需输入")
 
+            else:
+                self.lineEdit_q.setEnabled(True)
+                self.lineEdit_ratio.setEnabled(True)
+                self.lineEdit_z_F.setEnabled(True)
+                self.lineEdit_q.setPlaceholderText("")
+                self.lineEdit_ratio.setPlaceholderText("")
+                self.lineEdit_z_F.setPlaceholderText("")
         else:
-            self.lineEdit_q.setEnabled(True)
-            self.lineEdit_ratio.setEnabled(True)
-            self.lineEdit_z_F.setEnabled(True)
-            self.lineEdit_q.setPlaceholderText("")
-            self.lineEdit_ratio.setPlaceholderText("")
-            self.lineEdit_z_F.setPlaceholderText("")
+            self.lineEdit_alpha.setEnabled(False)
+            self.lineEdit_alpha.clear()
+            self.lineEdit_alpha.setPlaceholderText("无需输入")
+            if self.radioButton_full.isChecked():
+                self.lineEdit_q.setEnabled(False)
+                self.lineEdit_ratio.setEnabled(False)
+                self.lineEdit_z_F.setEnabled(False)
+                self.lineEdit_q.clear()
+                self.lineEdit_ratio.clear()
+                self.lineEdit_z_F.clear()
+                self.lineEdit_q.setPlaceholderText("无需输入")
+                self.lineEdit_ratio.setPlaceholderText("无需输入")
+                self.lineEdit_z_F.setPlaceholderText("无需输入")
+            else:   
+                self.lineEdit_q.setEnabled(True)
+                self.lineEdit_ratio.setEnabled(True)
+                self.lineEdit_z_F.setEnabled(True)
+                self.lineEdit_q.setPlaceholderText("")
+                self.lineEdit_ratio.setPlaceholderText("")
+                self.lineEdit_z_F.setPlaceholderText("")
+ 
 
     def show_about_message(self):
         """显示关于信息框"""
@@ -151,7 +195,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             self.draw_diagram_for_partial_reflux()
         
-
+    # 以下代码是业务逻辑核心
     def draw_diagram_for_partial_reflux(self):
         """计算部分回流理论塔板并作图"""
         # 运行该方法时先检查输入是否完整
@@ -272,13 +316,95 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.textBrowser_output.append(plain_content)
 
 
+    # 以下代码为解决非理想物系的特殊方案
+    def import_file(self):
+        """导入文件，并更新主窗口状态栏"""
+        selected_file_path, file_filter = QFileDialog.getOpenFileName(
+            self,
+            "选择文件",
+            "",
+            "Excel文件 (*.xlsx *.xls);;CSV文件 (*.csv);;所有文件 (*.*)"
+        )
+
+        if not selected_file_path:
+            return
         
+        self.current_file_path = selected_file_path
 
-
-
-
-    
+        if selected_file_path.lower().endswith('.csv'):
+            try:
+                df = pd.read_csv(selected_file_path)
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "导入失败",
+                    f"读取CSV文件失败:\n{str(e)}\n",
+                    QMessageBox.Ok
+                )
+                return 
+            self.import_success = self.process_dataframe(df)
+        elif selected_file_path.lower().endswith(('.xlsx', '.xls')):
+            try:
+                df = pd.read_excel(selected_file_path)
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "导入失败",
+                    f"读取Excel文件失败:\n{str(e)}\n"
+                    f"如果您多次失败，可考虑使用CSV文件，在Excel中可另存为CSV文件",
+                    QMessageBox.Ok
+                )
+                return 
+            self.import_success = self.process_dataframe(df)
+        else:
+            QMessageBox.warning(self, "不支持的文件格式", "请选择CSV或Excel文件")
+            return
         
+        current_time = QDateTime.currentDateTime().toString("hh:mm:ss")
+        if self.import_success:
+            plain_content = (f"======== {current_time} 文件导入成功========\n" 
+                        f"请检查以下导入的相平衡数据x-y. 若确认无误, 可进行后续步骤; 若有误, 请重新导入\n" 
+                        f"x: {self.equilibrium_x}\n"
+                        f"y: {self.equilibrium_y}")
+            self.textBrowser_output.append(plain_content)
+        else:
+            plain_content = (f"======== {current_time} 文件导入失败========\n" 
+                        f"请点击“文件导入须知...”以获得更多信息") 
+            self.textBrowser_output.append(plain_content)
+        self.update_statusBar()
+
+    def process_dataframe(self, df):
+        """处理DataFrame数据。
+        
+        会更改MainWindow中的equilibrium_x, equilibrium_x
+
+        Args:
+            df(DataFrame): pandas.DataFrame 类的实例
+
+        Returns:
+            bool: 导入是否成功 
+        """
+        try:
+            # 检查数据是否有x,y两列数据（iloc[行, 列]）, 数据中没有NaN, 第一个点为(0, 0), 最后一个点为(1, 1)
+            if (len(df.columns) == 2 and
+                (not df.isna().any().any()) and 
+                (df.iloc[0,0] == 0) and 
+                (df.iloc[0,1] == 0) and
+                (df.iloc[-1,0] == 1) and
+                (df.iloc[-1,1] == 1)):
+                self.equilibrium_x = df.iloc[:, 0].astype(float).tolist()
+                self.equilibrium_y = df.iloc[:, 1].astype(float).tolist()
+                return True
+            else:
+                return False
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "处理数据失败",
+                f"处理数据时出错:\n{str(e)}"
+            )
+            return False
 
 
-
+    def show_import_help(self):
+        pass
