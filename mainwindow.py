@@ -1,12 +1,12 @@
-import sys
-import os
-
-from PySide6.QtWidgets import QMainWindow, QStatusBar, QMessageBox, QFileDialog
-from PySide6.QtCore import QDateTime, Qt
+from PySide6.QtWidgets import QMainWindow, QWidget, QStatusBar, QMessageBox, QFileDialog
+from PySide6.QtCore import QDateTime
 from ui_mainwindow import Ui_MainWindow
+from ui_widget import Ui_Widget
 
 import partial_reflux
+import partial_reflux_non_ideal
 import full_reflux
+import full_reflux_non_ideal
 import data_check
 
 import matplotlib.pyplot as plt 
@@ -172,7 +172,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             "关于",
             "作者: White Pan\n"
             "Email: greengiantpanda@outlook.com\n"
-            "Version: 1.0",
+            "Version: 1.2.0",
             QMessageBox.StandardButton.Ok
         )
 
@@ -190,10 +190,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def draw_diagram(self):
         """根据选择执行不同的方法组合"""
-        if self.radioButton_full.isChecked():
-            self.draw_diagram_for_full_reflux()
+        if self.radioButton_ideal.isChecked():
+            if self.radioButton_full.isChecked():
+                self.draw_diagram_for_full_reflux()
+            else:
+                self.draw_diagram_for_partial_reflux()
         else:
-            self.draw_diagram_for_partial_reflux()
+            if self.radioButton_full.isChecked():
+                self.draw_diagram_for_full_reflux_special()
+            else:
+                self.draw_diagram_for_partial_reflux_special()
         
     # 以下代码是业务逻辑核心
     def draw_diagram_for_partial_reflux(self):
@@ -217,7 +223,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         partial_reflux_process = partial_reflux.PartialReflux(alpha, q, ratio, z_F, x_D, x_W)
 
         x_for_global = np.linspace(0, 1, 50)
-        x_for_qline = np.linspace(min([partial_reflux_process.intersection[0], z_F]), max([partial_reflux_process.intersection[0], z_F]), 50)
+        x_for_qline = np.linspace(min([partial_reflux_process.intersection[0], z_F]), 
+                                  max([partial_reflux_process.intersection[0], z_F]), 50)
         x_for_rectification = np.linspace(0, x_D, 50)
         x_for_stripping = np.linspace(x_W, partial_reflux_process.intersection[0], 50)
         
@@ -328,8 +335,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         if not selected_file_path:
             return
-        
-        self.current_file_path = selected_file_path
 
         if selected_file_path.lower().endswith('.csv'):
             try:
@@ -407,4 +412,129 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
     def show_import_help(self):
-        pass
+        self.window = Widget()
+        self.window.textBrowser.setOpenExternalLinks(True)
+        self.window.show()
+
+
+    def draw_diagram_for_partial_reflux_special(self):
+        """计算部分回流(非理想)理论塔板并作图"""
+        # 运行该方法时先检查输入是否完整
+        if not self.checker_partial_special.is_all_filled() or not self.import_success:
+            QMessageBox.critical(
+                self,
+                "错误",
+                " 输入未完成，计算已终止。",
+                QMessageBox.Ok
+            )
+            return
+        
+        ratio = eval(self.lineEdit_ratio.text())
+        q = eval(self.lineEdit_q.text())
+        z_F = eval(self.lineEdit_z_F.text())
+        x_D = eval(self.lineEdit_x_D.text())
+        x_W = eval(self.lineEdit_x_W.text())
+        partial_reflux_process_special = partial_reflux_non_ideal.PartialRefluxNonIdeal(self.equilibrium_x, self.equilibrium_y, 
+                                                                                        q, ratio, z_F, x_D, x_W)
+
+        x_for_global = np.linspace(0, 1, 50)
+        x_for_qline = np.linspace(min([partial_reflux_process_special.intersection[0], z_F]), 
+                                  max([partial_reflux_process_special.intersection[0], z_F]), 50)
+        x_for_rectification = np.linspace(0, x_D, 50)
+        x_for_stripping = np.linspace(x_W, partial_reflux_process_special.intersection[0], 50)
+
+        matplotlib.rcParams['font.family']='Microsoft YaHei'
+        matplotlib.rcParams['axes.unicode_minus']=False
+        plt.figure(figsize=(8, 8))
+        plt.title("精馏塔理论板图(部分回流)")
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.xlim(0, 1)
+        plt.ylim(0, 1)
+
+        plt.plot(x_for_global, x_for_global, label="y = x")
+        plt.plot(x_for_global, partial_reflux_process_special.equilibrium_line(x_for_global), label="平衡线")
+        plt.plot(x_for_rectification, partial_reflux_process_special.operating_line_of_rectification_section(x_for_rectification),
+                                                                                      label="精馏段操作线")
+        if q != 1:
+            plt.plot(x_for_qline, partial_reflux_process_special.q_line(x_for_qline), label="q线")
+        else:
+            plt.axvline(x=z_F, ymin=z_F, ymax=partial_reflux_process_special.intersection[1], label="q线")
+        plt.plot(x_for_stripping, partial_reflux_process_special.operating_line_of_stripping_section(x_for_stripping),
+                                                                                label="提馏段操作线")
+        plt.legend()
+
+        plate, plate_for_loading = partial_reflux_process_special.calculate_theory_plate()
+        print(f"理论板数: {plate}\n加料板: {plate_for_loading}")
+
+        for i in range(len(partial_reflux_process_special.x_list) - 1):
+            i_plus_one = i + 1
+            plt.axhline(y=partial_reflux_process_special.y_list[i], xmin=float(partial_reflux_process_special.x_list[i_plus_one]), 
+                        xmax=float(partial_reflux_process_special.x_list[i]), color="black")
+            plt.axvline(x=partial_reflux_process_special.x_list[i_plus_one], ymin=float(partial_reflux_process_special.y_list[i_plus_one]), 
+                        ymax=float(partial_reflux_process_special.y_list[i]), color="black")
+        plt.show()
+
+        # 在程序中显示结果
+        current_time = QDateTime.currentDateTime().toString("hh:mm:ss")
+        plain_content = (f"======== {current_time} 部分回流结果========\n" 
+                        f"最优加料板: {plate_for_loading}\n" 
+                        f"理论板数: {round(plate, 2)}")
+        self.textBrowser_output.append(plain_content)
+
+    def draw_diagram_for_full_reflux_special(self):
+        """计算全回流(非理想)理论塔板并作图"""
+        # 运行该方法时先检查输入是否完整
+        if not self.checker_full_special.is_all_filled() or not self.import_success:
+            QMessageBox.critical(
+                self,
+                "错误",
+                " 输入未完成，计算已终止。",
+                QMessageBox.Ok
+            )
+            return
+        
+        x_D = eval(self.lineEdit_x_D.text())
+        x_W = eval(self.lineEdit_x_W.text())
+        full_reflux_process_special = full_reflux_non_ideal.FullRefluxNonIdeal(self.equilibrium_x, self.equilibrium_y,
+                                                                               x_D, x_W)
+        x_for_global = np.linspace(0, 1, 50)
+
+        matplotlib.rcParams['font.family']='Microsoft YaHei'
+        matplotlib.rcParams['axes.unicode_minus']=False
+        plt.figure(figsize=(8, 8))
+        plt.title("精馏塔理论板图(全回流)")
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.xlim(0, 1)
+        plt.ylim(0, 1)
+
+        plt.plot(x_for_global, x_for_global, label="y = x")
+        plt.plot(x_for_global, full_reflux_process_special.equilibrium_line(x_for_global), label="平衡线")
+        plt.legend()
+
+        plate = full_reflux_process_special.calculate_theory_plate()
+        print(f"理论板数: {plate}")
+
+        for i in range(len(full_reflux_process_special.x_list) - 1):
+            i_plus_one = i + 1
+            plt.axhline(y=full_reflux_process_special.y_list[i], xmin=float(full_reflux_process_special.x_list[i_plus_one]),
+                         xmax=float(full_reflux_process_special.x_list[i]), color="black")
+            plt.axvline(x=full_reflux_process_special.x_list[i_plus_one], ymin=float(full_reflux_process_special.y_list[i_plus_one]),
+                        ymax=float(full_reflux_process_special.y_list[i]), color="black")
+            
+        plt.show()
+
+        # 在程序中显示结果
+        current_time = QDateTime.currentDateTime().toString("hh:mm:ss")
+        plain_content = (f"======== {current_time} 全回流结果========\n" 
+                        f"理论板数: {round(plate, 2)}")
+        self.textBrowser_output.append(plain_content)
+
+
+class Widget(QWidget, Ui_Widget):
+    def __init__(self):
+        super().__init__()
+        self.setupUi(self)
+        self.setWindowTitle("文件导入帮助")
+        
