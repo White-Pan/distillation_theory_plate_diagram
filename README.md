@@ -32,6 +32,4 @@ https://www.cup.edu.cn/cgzsw/docs//2021-12/f23cb85ef6a44c12845502b2029abaad.pdf
 若应用程序无响应，则计算出错，需强制关闭。
 
 有问题欢迎提出  
-At Nanjing Tech Univ.   
-NANYUAN
 2026.2
