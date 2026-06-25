@@ -172,7 +172,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             "关于",
             "作者: White Pan\n"
             "Email: greengiantpanda@outlook.com\n"
-            "Version: 1.2.0",
+            "Version: 1.2.1",
             QMessageBox.StandardButton.Ok
         )
 
@@ -220,14 +220,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         z_F = eval(self.lineEdit_z_F.text())
         x_D = eval(self.lineEdit_x_D.text())
         x_W = eval(self.lineEdit_x_W.text())
-        partial_reflux_process = partial_reflux.PartialReflux(alpha, q, ratio, z_F, x_D, x_W)
+        try:
+            partial_reflux_process = partial_reflux.PartialReflux(alpha, q, ratio, z_F, x_D, x_W)
+        except ValueError as e:
+            QMessageBox.critical(self, "参数错误", str(e), QMessageBox.Ok)
+            return
 
         x_for_global = np.linspace(0, 1, 50)
-        x_for_qline = np.linspace(min([partial_reflux_process.intersection[0], z_F]), 
+        x_for_qline = np.linspace(min([partial_reflux_process.intersection[0], z_F]),
                                   max([partial_reflux_process.intersection[0], z_F]), 50)
         x_for_rectification = np.linspace(0, x_D, 50)
         x_for_stripping = np.linspace(x_W, partial_reflux_process.intersection[0], 50)
-        
+
         matplotlib.rcParams['font.family']='Microsoft YaHei'
         matplotlib.rcParams['axes.unicode_minus']=False
         plt.figure(figsize=(8, 8))
@@ -248,7 +252,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         plt.plot(x_for_stripping, partial_reflux_process.operating_line_of_stripping_section(x_for_stripping),
                                                                                 label="提馏段操作线")
         plt.legend()
-        
+
 
         plate, plate_for_loading = partial_reflux_process.calculate_theory_plate()
         print(f"理论板数: {plate}\n加料板: {plate_for_loading}")
@@ -434,11 +438,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         z_F = eval(self.lineEdit_z_F.text())
         x_D = eval(self.lineEdit_x_D.text())
         x_W = eval(self.lineEdit_x_W.text())
-        partial_reflux_process_special = partial_reflux_non_ideal.PartialRefluxNonIdeal(self.equilibrium_x, self.equilibrium_y, 
-                                                                                        q, ratio, z_F, x_D, x_W)
+        try:
+            partial_reflux_process_special = partial_reflux_non_ideal.PartialRefluxNonIdeal(
+                self.equilibrium_x, self.equilibrium_y,
+                q, ratio, z_F, x_D, x_W)
+        except ValueError as e:
+            QMessageBox.critical(self, "参数错误", str(e), QMessageBox.Ok)
+            return
 
         x_for_global = np.linspace(0, 1, 50)
-        x_for_qline = np.linspace(min([partial_reflux_process_special.intersection[0], z_F]), 
+        x_for_qline = np.linspace(min([partial_reflux_process_special.intersection[0], z_F]),
                                   max([partial_reflux_process_special.intersection[0], z_F]), 50)
         x_for_rectification = np.linspace(0, x_D, 50)
         x_for_stripping = np.linspace(x_W, partial_reflux_process_special.intersection[0], 50)

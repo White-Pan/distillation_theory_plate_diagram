@@ -1,5 +1,8 @@
 __pycache__/
 .vscode/
+dist/
 temp/
 build/
 temp.py
+main.spec
+.venv/
